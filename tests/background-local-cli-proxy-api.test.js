@@ -161,6 +161,25 @@ test('local cli proxy api turns exchanged tokens into local codex auth json and 
   assert.equal(artifact.authJson.refresh_token, 'refresh-local-123');
   assert.deepEqual(artifact.warnings, []);
 
+  assert.ok(artifact.sub2api, 'expected artifact.sub2api to be present');
+  assert.equal(artifact.sub2api.fileName, 'sub2api-local@example.com-plus.json');
+  assert.equal(artifact.sub2api.directoryPath, artifact.directoryPath);
+  assert.equal(artifact.sub2api.relativeAuthDir, artifact.relativeAuthDir);
+  assert.equal(artifact.sub2api.filePath, path.join(artifact.directoryPath, artifact.sub2api.fileName));
+  assert.equal(artifact.sub2api.document.exported_at, '2026-05-20T00:00:00.000Z');
+  assert.deepEqual(artifact.sub2api.document.proxies, []);
+  assert.equal(artifact.sub2api.document.accounts.length, 1);
+  const sub2apiAccount = artifact.sub2api.document.accounts[0];
+  assert.equal(sub2apiAccount.platform, 'openai');
+  assert.equal(sub2apiAccount.type, 'oauth');
+  assert.equal(sub2apiAccount.credentials.access_token, accessToken);
+  assert.equal(sub2apiAccount.credentials.email, 'local@example.com');
+  assert.equal(sub2apiAccount.credentials.chatgpt_account_id, 'acct-local-123');
+  assert.equal(sub2apiAccount.credentials.chatgpt_user_id, 'user-local-1');
+  assert.equal(sub2apiAccount.credentials.plan_type, 'plus');
+  assert.equal(sub2apiAccount.extra.email_key, 'local_example_com');
+  assert.equal(sub2apiAccount.extra.source, 'chatgpt_web_session');
+
   const saved = await client.saveAuthJsonArtifact(artifact);
   assert.equal(saved.saved, true);
   assert.equal(fs.existsSync(saved.filePath), true);

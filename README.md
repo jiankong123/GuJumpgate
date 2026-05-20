@@ -111,6 +111,10 @@
 ![选择导出至本地 CPA JSON 无 RT](docs/images/github-readme-export-target-local-cpa-json-no-rt.png)
 目前只推荐这个导出方式，Oauth登录严重风控，几乎100%弹出验证手机号
 
+> 该导出步骤会同时在本地插件 `.cli-proxy-api` 目录下写入两份 JSON：
+> - `codex-<email>-<plan>.json`：CLIProxyAPI 兼容的 CPA 凭证文件。
+> - `sub2api-<email>-<plan>.json`：参考 GPTSession2CPAandSub2API 的 sub2api 文档（`{ exported_at, proxies, accounts }`）。
+
 ![配置扩展参数字段](docs/images/github-readme-extension-config-fields.png)
 
 在扩展中打开侧边栏，配置 、接码 API、PayPal 接码电话，并导入 Outlook 邮箱。

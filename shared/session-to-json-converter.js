@@ -122,6 +122,49 @@
     return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : 0;
   }
 
+  function isPlainObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function getExpiresInSeconds(expiresAt, now = new Date()) {
+    if (!expiresAt) {
+      return undefined;
+    }
+    const expiresMs = new Date(expiresAt).getTime();
+    if (Number.isNaN(expiresMs)) {
+      return undefined;
+    }
+    return Math.max(0, Math.floor((expiresMs - now.getTime()) / 1000));
+  }
+
+  function toEmailKey(email) {
+    if (typeof email !== 'string') {
+      return undefined;
+    }
+    return email
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || undefined;
+  }
+
+  function stripUnavailable(value) {
+    if (Array.isArray(value)) {
+      const items = value.map(stripUnavailable).filter((item) => item !== undefined);
+      return items.length ? items : undefined;
+    }
+    if (isPlainObject(value)) {
+      const entries = Object.entries(value)
+        .map(([key, item]) => [key, stripUnavailable(item)])
+        .filter(([, item]) => item !== undefined);
+      return entries.length ? Object.fromEntries(entries) : undefined;
+    }
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return value;
+  }
+
   function buildSyntheticCodexIdToken(email, accountId, planType, userId, expiresAt) {
     if (!accountId) {
       return undefined;
@@ -151,6 +194,52 @@
     }
 
     return `${encodeBase64UrlJson({ alg: 'none', typ: 'JWT', cpa_synthetic: true })}.${encodeBase64UrlJson(payload)}.`;
+  }
+
+  function buildSub2apiAccount({
+    name,
+    email,
+    accessToken,
+    accountId,
+    userId,
+    expiresAt,
+    expiresIn,
+    planType,
+    sourceName,
+    exportedAt,
+  } = {}) {
+    return stripUnavailable({
+      name: firstNonEmpty(name, email, sourceName, 'ChatGPT Account'),
+      platform: 'openai',
+      type: 'oauth',
+      concurrency: 10,
+      priority: 1,
+      credentials: {
+        access_token: accessToken,
+        chatgpt_account_id: accountId,
+        chatgpt_user_id: userId,
+        email,
+        expires_at: expiresAt,
+        expires_in: expiresIn,
+        plan_type: planType,
+      },
+      extra: {
+        email,
+        email_key: toEmailKey(email),
+        name: firstNonEmpty(name, email, sourceName, 'ChatGPT Account'),
+        source: 'chatgpt_web_session',
+        last_refresh: exportedAt,
+      },
+    });
+  }
+
+  function buildSub2apiDocument(accounts, now = new Date()) {
+    const list = Array.isArray(accounts) ? accounts : [accounts];
+    return {
+      exported_at: normalizeTimestamp(now),
+      proxies: [],
+      accounts: list.filter((account) => account !== undefined && account !== null),
+    };
   }
 
   function convertSessionJson(record, options = {}) {
@@ -246,9 +335,12 @@
       auth.chatgpt_plan_type,
       idAuth.chatgpt_plan_type
     );
+    const now = options.now instanceof Date ? options.now : new Date();
     const exportedAt = Object.prototype.hasOwnProperty.call(options, 'lastRefresh')
       ? String(options.lastRefresh ?? '')
-      : normalizeTimestamp(options.now || new Date());
+      : normalizeTimestamp(now);
+    const sub2apiExportedAt = normalizeTimestamp(now);
+    const expiresIn = getExpiresInSeconds(expiresAt, now);
     const name = firstNonEmpty(email, options.sourceName, 'ChatGPT Account');
     const syntheticIdToken = !inputIdToken
       ? buildSyntheticCodexIdToken(email, accountId, planType, userId, expiresAt)
@@ -275,6 +367,19 @@
       }).filter(([, value]) => value !== undefined && value !== null)
     );
 
+    const sub2apiAccount = buildSub2apiAccount({
+      name,
+      email,
+      accessToken,
+      accountId,
+      userId,
+      expiresAt,
+      expiresIn,
+      planType,
+      sourceName: options.sourceName,
+      exportedAt: sub2apiExportedAt,
+    });
+
     const warnings = [];
     if (!inputIdToken && syntheticIdToken) {
       warnings.push('Missing real id_token; generated synthetic CPA-compatible id_token.');
@@ -283,10 +388,12 @@
       warnings.push('Missing refresh_token; imported account cannot refresh automatically after access token expiry.');
     }
 
-    return { output, warnings };
+    return { output, warnings, sub2apiAccount };
   }
 
   return {
+    buildSub2apiAccount,
+    buildSub2apiDocument,
     convertSessionJson,
   };
 });

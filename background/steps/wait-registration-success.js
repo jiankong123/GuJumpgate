@@ -152,7 +152,7 @@
       });
     }
 
-    async function saveLocalCpaJsonArtifactViaHelper(helperBaseUrl, artifact) {
+    async function saveJsonArtifactViaHelper(helperBaseUrl, artifact) {
       const endpoint = typeof buildLocalHelperEndpoint === 'function'
         ? buildLocalHelperEndpoint(helperBaseUrl, '/save-auth-json')
         : new URL('/save-auth-json', `${helperBaseUrl.replace(/\/+$/, '')}/`).toString();
@@ -298,12 +298,26 @@
         await addLog(`步骤 ${visibleStep}：${warning}`, 'warn');
       }
 
-      const saved = await saveLocalCpaJsonArtifactViaHelper(helperBaseUrl, artifact);
-      const verifiedStatus = `本地CPA JSON 无RT 已导出：${saved.filePath}`;
-      await addLog(`步骤 ${visibleStep}：${verifiedStatus}`, 'ok');
+      const savedCpa = await saveJsonArtifactViaHelper(helperBaseUrl, artifact);
+      const sub2apiArtifact = artifact.sub2api;
+      let savedSub2api = null;
+      if (sub2apiArtifact && normalizeString(sub2apiArtifact.filePath)) {
+        savedSub2api = await saveJsonArtifactViaHelper(helperBaseUrl, sub2apiArtifact);
+      }
+
+      const verifiedLines = [`本地CPA JSON 无RT 已导出：${savedCpa.filePath}`];
+      if (savedSub2api) {
+        verifiedLines.push(`本地 SUB2API JSON 已导出：${savedSub2api.filePath}`);
+      }
+      const verifiedStatus = verifiedLines.join('\n');
+      for (const line of verifiedLines) {
+        await addLog(`步骤 ${visibleStep}：${line}`, 'ok');
+      }
+
       return {
         verifiedStatus,
-        localCpaJsonFilePath: saved.filePath,
+        localCpaJsonFilePath: savedCpa.filePath,
+        localSub2apiJsonFilePath: savedSub2api ? savedSub2api.filePath : '',
       };
     }
 
