@@ -39,7 +39,7 @@
     id: 7,
     order: 70,
     key: 'local-cpa-json-export',
-    title: '导出本地CPA JSON',
+    title: '导出本地 CPA / SUB2API JSON',
     sourceId: 'chatgpt',
     driverId: null,
     command: 'local-cpa-json-export',

@@ -234,7 +234,7 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   );
   assert.equal(localCpaJsonNoRtSteps.some((step) => step.key === 'wait-registration-success'), false);
   assert.equal(localCpaJsonNoRtSteps[5].title, '创建 Plus Checkout');
-  assert.equal(localCpaJsonNoRtSteps[6].title, '导出本地CPA JSON');
+  assert.equal(localCpaJsonNoRtSteps[6].title, '导出本地 CPA / SUB2API JSON');
   assert.deepStrictEqual(api.getStepIds({ panelMode: 'local-cpa-json-no-rt', plusModeEnabled: true }), [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(api.getLastStepId({ panelMode: 'local-cpa-json-no-rt', plusModeEnabled: true }), 7);
 });

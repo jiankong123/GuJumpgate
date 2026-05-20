@@ -39,7 +39,9 @@
       || globalThis.MultiPageSessionToJsonConverter
       || (typeof self !== 'undefined' ? self.MultiPageSessionToJsonConverter : null)
       || null;
-    if (candidate && typeof candidate.convertSessionJson === 'function') {
+    if (candidate
+      && typeof candidate.convertSessionJson === 'function'
+      && typeof candidate.buildSub2apiDocument === 'function') {
       return candidate;
     }
     throw new Error('session-to-json 转换模块未加载，无法生成本地 auth json。');
@@ -247,6 +249,26 @@
     return `codex-${email}-${planType}.json`;
   }
 
+  async function buildSub2apiFileName(authJson, options = {}) {
+    const cryptoLike = getCryptoLike(options.crypto);
+    const email = normalizeString(authJson?.email);
+    if (!email) {
+      throw new Error('生成本地 sub2api 文件名失败：json 中缺少 email。');
+    }
+
+    const planType = normalizePlanTypeForFilename(authJson?.plan_type || authJson?.chatgpt_plan_type);
+    const accountId = normalizeString(authJson?.account_id || authJson?.chatgpt_account_id);
+    const hashAccountId = accountId ? (await sha256Hex(accountId, cryptoLike)).slice(0, 8) : '';
+
+    if (!planType) {
+      return `sub2api-${email}.json`;
+    }
+    if (planType === 'team') {
+      return `sub2api-${hashAccountId}-${email}-${planType}.json`;
+    }
+    return `sub2api-${email}-${planType}.json`;
+  }
+
   function createLocalCliProxyApi(deps = {}) {
     const fetchLike = getFetchLike(deps.fetch);
     const cryptoLike = getCryptoLike(deps.crypto);
@@ -361,9 +383,10 @@
         plan_type: options.planType || options.plan_type || sourceSession.account?.planType || sourceSession.account?.plan_type,
       };
 
+      const now = options.now instanceof Date ? options.now : new Date();
       const converted = sessionConverter.convertSessionJson(sessionRecord, {
         lastRefresh: options.lastRefresh,
-        now: options.now || new Date(),
+        now,
         sourceName: normalizeString(options.sourceName) || 'CLIProxyAPI Local OAuth',
       });
 
@@ -379,6 +402,12 @@
       const filePath = joinPath(directoryPath, fileName);
       const jsonText = `${JSON.stringify(authJson, null, 2)}\n`;
 
+      const sub2apiAccount = converted.sub2apiAccount;
+      const sub2apiDocument = sessionConverter.buildSub2apiDocument(sub2apiAccount ? [sub2apiAccount] : [], now);
+      const sub2apiFileName = await buildSub2apiFileName(authJson, { crypto: cryptoLike });
+      const sub2apiFilePath = joinPath(directoryPath, sub2apiFileName);
+      const sub2apiJsonText = `${JSON.stringify(sub2apiDocument, null, 2)}\n`;
+
       return {
         provider: 'codex',
         fileName,
@@ -388,6 +417,15 @@
         authJson,
         jsonText,
         warnings: Array.isArray(converted.warnings) ? converted.warnings.slice() : [],
+        sub2api: {
+          fileName: sub2apiFileName,
+          directoryPath,
+          filePath: sub2apiFilePath,
+          relativeAuthDir,
+          document: sub2apiDocument,
+          account: sub2apiAccount,
+          jsonText: sub2apiJsonText,
+        },
       };
     }
 
@@ -454,6 +492,7 @@
     DEFAULT_RELATIVE_AUTH_DIR,
     buildAuthUrl,
     buildCredentialFileName,
+    buildSub2apiFileName,
     createLocalCliProxyApi,
     generatePkceCodes,
     generateRandomState,

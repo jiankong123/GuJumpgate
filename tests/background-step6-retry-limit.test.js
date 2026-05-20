@@ -131,6 +131,12 @@ test('local cpa json no-RT export runs as step 7 after Plus checkout completes',
           directoryPath: 'C:/plugin/.cli-proxy-api',
           jsonText: '{"email":"user@example.com"}\n',
           warnings: ['Missing refresh_token; imported account cannot refresh automatically after access token expiry.'],
+          sub2api: {
+            fileName: 'sub2api-user@example.com-plus.json',
+            directoryPath: 'C:/plugin/.cli-proxy-api',
+            filePath: 'C:/plugin/.cli-proxy-api/sub2api-user@example.com-plus.json',
+            jsonText: '{"exported_at":"2026-05-20T00:00:00.000Z","proxies":[],"accounts":[{"email":"user@example.com"}]}\n',
+          },
         };
       },
     }),
@@ -163,12 +169,13 @@ test('local cpa json no-RT export runs as step 7 after Plus checkout completes',
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options = {}) => {
     events.fetchCalls.push({ url, options });
+    const requested = JSON.parse(String(options.body || '{}'));
     return {
       ok: true,
       status: 200,
       json: async () => ({
         ok: true,
-        filePath: 'C:/plugin/.cli-proxy-api/codex-user@example.com-plus.json',
+        filePath: requested.filePath,
       }),
     };
   };
@@ -195,24 +202,34 @@ test('local cpa json no-RT export runs as step 7 after Plus checkout completes',
   assert.equal(events.sendCalls[0].sourceId, 'plus-checkout');
   assert.equal(events.sendCalls[0].message.type, 'PLUS_CHECKOUT_GET_STATE');
   assert.equal(events.sendCalls[0].message.payload.includeSession, true);
-  assert.equal(events.fetchCalls.length, 1);
+  assert.equal(events.fetchCalls.length, 2);
   assert.equal(events.artifactOptions.length, 1);
   assert.equal(events.artifactOptions[0].session.account.id, 'acct-1');
   assert.equal(events.artifactOptions[0].session.user.id, 'user-1');
   assert.equal(events.artifactOptions[0].sessionToken, 'session-cookie-token');
   assert.equal(events.artifactOptions[0].planType, 'plus');
   assert.equal(events.artifactOptions[0].lastRefresh, '');
-  assert.equal(JSON.parse(events.fetchCalls[0].options.body).content, '{"email":"user@example.com"}\n');
+  const cpaPostBody = JSON.parse(events.fetchCalls[0].options.body);
+  const sub2apiPostBody = JSON.parse(events.fetchCalls[1].options.body);
+  assert.equal(cpaPostBody.filePath, 'C:/plugin/.cli-proxy-api/codex-user@example.com-plus.json');
+  assert.equal(cpaPostBody.content, '{"email":"user@example.com"}\n');
+  assert.equal(sub2apiPostBody.filePath, 'C:/plugin/.cli-proxy-api/sub2api-user@example.com-plus.json');
+  assert.equal(JSON.parse(sub2apiPostBody.content).accounts[0].email, 'user@example.com');
   assert.deepStrictEqual(events.completed, [{
     nodeId: 'local-cpa-json-export',
     payload: {
-      verifiedStatus: '本地CPA JSON 无RT 已导出：C:/plugin/.cli-proxy-api/codex-user@example.com-plus.json',
+      verifiedStatus: [
+        '本地CPA JSON 无RT 已导出：C:/plugin/.cli-proxy-api/codex-user@example.com-plus.json',
+        '本地 SUB2API JSON 已导出：C:/plugin/.cli-proxy-api/sub2api-user@example.com-plus.json',
+      ].join('\n'),
       localCpaJsonFilePath: 'C:/plugin/.cli-proxy-api/codex-user@example.com-plus.json',
+      localSub2apiJsonFilePath: 'C:/plugin/.cli-proxy-api/sub2api-user@example.com-plus.json',
     },
   }]);
   assert.ok(events.logs.some(({ message }) => /Plus Checkout 已完成，等待 5 秒后导出/.test(message)));
   assert.ok(events.logs.some(({ message, level }) => level === 'warn' && /Missing refresh_token/.test(message)));
   assert.ok(events.logs.some(({ message }) => /本地CPA JSON 无RT 已导出/.test(message)));
+  assert.ok(events.logs.some(({ message }) => /本地 SUB2API JSON 已导出/.test(message)));
 });
 
 test('step 7 retries up to configured limit and then fails', async () => {
