@@ -122,10 +122,6 @@
     return Number.isFinite(parsed) ? Math.trunc(parsed / 1000) : 0;
   }
 
-  function isPlainObject(value) {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-  }
-
   function getExpiresInSeconds(expiresAt, now = new Date()) {
     if (!expiresAt) {
       return undefined;
